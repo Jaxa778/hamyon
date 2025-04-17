@@ -11,16 +11,44 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _balanceController = TextEditingController();
   final localDatacourse = LocalDatacourse();
   final walletController = WalletController();
+  double costs = 0.0;
+  bool isLoading = false;
+  String balance = "";
 
   @override
   void initState() {
     super.initState();
 
+    getLocalDatabase();
     walletController.getWallets().then((result) {
+      costsFunction();
       setState(() {});
     });
+  }
+
+  Future<void> getLocalDatabase() async {
+    final getedData = await localDatacourse.getBalance();
+    balance = getedData.toString();
+  }
+
+  void costsFunction() {
+    costs = walletController.wallets.fold(0, (sum, e) => sum + e.cost);
+  }
+
+  void setBalance() async {
+    setState(() {
+      isLoading = true;
+    });
+    await localDatacourse.saveBalance(double.parse(_balanceController.text));
+    setState(() {
+      isLoading = false;
+      getLocalDatabase();
+      costsFunction();
+    });
+    Navigator.pop(context);
   }
 
   @override
@@ -38,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
 
             if (result == true) {
+              costsFunction();
               setState(() {});
             }
           } catch (e, s) {
@@ -57,7 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Align(
             alignment: Alignment.topCenter,
-            child: Text("20,000 so`m", style: TextStyle(fontSize: 28)),
+            child: Text(
+              "${costs.toStringAsFixed(2)} so`m",
+              style: TextStyle(fontSize: 28),
+            ),
           ),
           Align(
             alignment: Alignment.bottomCenter,
@@ -79,11 +111,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${localDatacourse.getBalance().toString()} so\'m',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                        GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  content: TextFormField(
+                                    controller: _balanceController,
+                                    decoration: InputDecoration(
+                                      labelText: "Hisob",
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          isLoading
+                                              ? null // Yuklash paytida o'chirilgan
+                                              : () => Navigator.pop(context),
+                                      child: Text("Bekor Qilish"),
+                                    ),
+                                    FilledButton(
+                                      onPressed: isLoading ? null : setBalance,
+                                      child:
+                                          isLoading
+                                              ? SizedBox(
+                                                height: 20,
+                                                width: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                              : Text("Saqlash"),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                          child: Text(
+                            '$balance so\'m',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         Text(
@@ -135,23 +211,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ListView.separated(
                         itemBuilder: (contex, index) {
                           final wallet = walletController.wallets[index];
-                          return ListTile(
-                            onTap: () async {
-                              final result = await showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (ctx) {
-                                  return ManageWalletDialog(eskiWallet: wallet);
-                                },
-                              );
+                          return Container(
+                            color: Colors.white,
+                            child: ListTile(
+                              // tileColor: const Color.fromRGBO(63, 81, 181, 1),
+                              onTap: () async {
+                                final result = await showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (ctx) {
+                                    return ManageWalletDialog(
+                                      eskiWallet: wallet,
+                                    );
+                                  },
+                                );
 
-                              if (result == true) {
-                                setState(() {});
-                              }
-                            },
-                            title: Text(wallet.title),
-                            subtitle: Text(wallet.date.toString()),
-                            trailing: Text("${wallet.cost.toString()} som"),
+                                if (result == true) {
+                                  costsFunction();
+                                  setState(() {});
+                                }
+                              },
+                              title: Text(wallet.title),
+                              subtitle: Text(wallet.date.toString()),
+                              trailing: Text("${wallet.cost.toString()} som"),
+                            ),
                           );
                         },
                         separatorBuilder:
