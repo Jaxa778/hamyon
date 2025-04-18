@@ -12,99 +12,212 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _balanceController = TextEditingController();
-  final localDatacourse = LocalDatacourse();
-  final walletController = WalletController();
-  double costs = 0.0;
-  bool isLoading = false;
-  String balance = "";
+  final _localDatacourse = LocalDatacourse();
+  final _walletController = WalletController();
+
+  double _costs = 0.0;
+  bool _isLoading = false;
+  String _balance = "0";
+  String _percentage = "0.0";
+  String _currentMonth = "";
+  DateTime _currentDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-
-    getLocalDatabase();
-    walletController.getWallets().then((result) {
-      costsFunction();
-      setState(() {});
-    });
+    _currentMonth = _monthName(DateTime.now().month);
+    _initializeData();
   }
 
-  Future<void> getLocalDatabase() async {
-    final getedData = await localDatacourse.getBalance();
-    balance = getedData.toString();
+  Future<void> _initializeData() async {
+    await _getLocalDatabase();
+    await _walletController.getWallets();
+    _calculateCosts();
+    if (mounted) setState(() {});
   }
 
-  void costsFunction() {
-    costs = walletController.wallets.fold(0, (sum, e) => sum + e.cost);
+  Future<void> _getLocalDatabase() async {
+    final getedData = await _localDatacourse.getBalance();
+    if (mounted) {
+      setState(() {
+        _balance = getedData.toString();
+      });
+    }
   }
 
-  void setBalance() async {
+  void _calculateCosts() {
+    _costs = _walletController.wallets.fold(0, (sum, e) => sum + e.cost);
+    double balanceValue = double.tryParse(_balance) ?? 0;
+    double percentValue = _costs > 0 ? (balanceValue / _costs) : 0;
+    _percentage = percentValue.toStringAsFixed(1);
+  }
+
+  Future<void> _setBalance() async {
     setState(() {
-      isLoading = true;
+      _isLoading = true;
     });
-    await localDatacourse.saveBalance(double.parse(_balanceController.text));
-    setState(() {
-      isLoading = false;
-      getLocalDatabase();
-      costsFunction();
-    });
-    Navigator.pop(context);
+
+    try {
+      double amount = double.tryParse(_balanceController.text) ?? 0;
+      await _localDatacourse.saveBalance(amount);
+      await _getLocalDatabase();
+      _calculateCosts();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  void _showBalanceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Hisobni yangilash'),
+          content: TextFormField(
+            controller: _balanceController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: "Hisob miqdori",
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              prefixIcon: const Icon(Icons.account_balance_wallet),
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _isLoading ? null : () => Navigator.pop(context),
+              child: const Text("Bekor qilish"),
+            ),
+            FilledButton(
+              onPressed: _isLoading ? null : _setBalance,
+              child:
+                  _isLoading
+                      ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                      : const Text("Saqlash"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _manageWallet([dynamic wallet]) async {
+    try {
+      final result = await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => ManageWalletDialog(eskiWallet: wallet),
+      );
+
+      if (result == true) {
+        _calculateCosts();
+        setState(() {});
+      }
+    } catch (e, s) {
+      debugPrint('$e');
+      debugPrint('$s');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FilledButton.icon(
-        onPressed: () async {
-          try {
-            final result = await showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) {
-                return ManageWalletDialog();
-              },
-            );
-
-            if (result == true) {
-              costsFunction();
-              setState(() {});
-            }
-          } catch (e, s) {
-            print(e);
-            print(s);
-          }
-        },
-        label: Icon(Icons.add),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _manageWallet,
+        autofocus: true,
+        child: Icon(Icons.add, color: Colors.white),
+        backgroundColor: Theme.of(context).primaryColor,
       ),
       appBar: AppBar(
-        leading: IconButton(onPressed: () {}, icon: Icon(Icons.arrow_back_ios)),
+        title: Text(_monthName(_currentDate.month)),
+        centerTitle: true,
+        leading: IconButton(
+          onPressed: () {
+            final now = DateTime.now();
+            final previousMonth = DateTime(now.year, now.month - 1);
+            setState(() {
+              _currentMonth = _monthName(previousMonth.month);
+            });
+          },
+          icon: const Icon(Icons.arrow_back_ios),
+        ),
         actions: [
-          IconButton(onPressed: () {}, icon: Icon(Icons.arrow_forward_ios)),
+          IconButton(
+            onPressed: () {
+              final now = DateTime.now();
+              final nextMonth = DateTime(now.year, now.month + 1);
+              setState(() {
+                _currentMonth = _monthName(nextMonth.month);
+              });
+            },
+            icon: const Icon(Icons.arrow_forward_ios),
+          ),
         ],
       ),
       body: Stack(
         children: [
+          // Umumiy Xarajatlar
           Align(
             alignment: Alignment.topCenter,
-            child: Text(
-              "${costs.toStringAsFixed(2)} so`m",
-              style: TextStyle(fontSize: 28),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: Column(
+                children: [
+                  const Text(
+                    "Umumiy xarajatlar",
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "${_costs.toStringAsFixed(0)} so'm",
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          // Balans bo'limi
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               width: double.infinity,
               height: 600,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.blue,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(50),
-                  topRight: Radius.circular(50),
+                  topLeft: Radius.circular(40),
+                  topRight: Radius.circular(40),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, -5),
+                  ),
+                ],
               ),
               child: Padding(
-                padding: const EdgeInsets.only(top: 20, left: 30, right: 30),
+                padding: const EdgeInsets.only(top: 30, left: 24, right: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -112,135 +225,267 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         GestureDetector(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  content: TextFormField(
-                                    controller: _balanceController,
-                                    decoration: InputDecoration(
-                                      labelText: "Hisob",
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(30),
-                                      ),
-                                    ),
+                          onTap: _showBalanceDialog,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.edit, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$_balance so\'m',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed:
-                                          isLoading
-                                              ? null // Yuklash paytida o'chirilgan
-                                              : () => Navigator.pop(context),
-                                      child: Text("Bekor Qilish"),
-                                    ),
-                                    FilledButton(
-                                      onPressed: isLoading ? null : setBalance,
-                                      child:
-                                          isLoading
-                                              ? SizedBox(
-                                                height: 20,
-                                                width: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      color: Colors.white,
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                              : Text("Saqlash"),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                          child: Text(
-                            '$balance so\'m',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        Text(
-                          '20%',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            "$_percentage %",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  (double.tryParse(_percentage) ?? 0) < 1.0
+                                      ? Colors.red
+                                      : Colors.green,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 30),
-                    LinearProgressIndicator(
-                      value: 0.4,
-                      minHeight: 5,
-                      backgroundColor: Colors.grey[300],
-                      color: Colors.orange,
+                    const SizedBox(height: 24),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: (double.tryParse(_percentage) ?? 0) / 100,
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withOpacity(0.3),
+                        color: Colors.white,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
           ),
+
+          // Amaliyotlar ro'yxati
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               width: double.infinity,
               height: 450,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.orange,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(50),
-                  topRight: Radius.circular(50),
+                  topLeft: Radius.circular(40),
+                  topRight: Radius.circular(40),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, -5),
+                  ),
+                ],
               ),
               child: Padding(
-                padding: EdgeInsets.only(top: 20, left: 30, right: 30),
+                padding: const EdgeInsets.only(top: 30, left: 24, right: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Amaliyotlar',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
+                    const SizedBox(height: 16),
                     Expanded(
-                      child: ListView.separated(
-                        itemBuilder: (contex, index) {
-                          final wallet = walletController.wallets[index];
-                          return Container(
-                            color: Colors.white,
-                            child: ListTile(
-                              // tileColor: const Color.fromRGBO(63, 81, 181, 1),
-                              onTap: () async {
-                                final result = await showDialog(
-                                  context: context,
-                                  barrierDismissible: false,
-                                  builder: (ctx) {
-                                    return ManageWalletDialog(
-                                      eskiWallet: wallet,
-                                    );
-                                  },
-                                );
-
-                                if (result == true) {
-                                  costsFunction();
-                                  setState(() {});
-                                }
-                              },
-                              title: Text(wallet.title),
-                              subtitle: Text(wallet.date.toString()),
-                              trailing: Text("${wallet.cost.toString()} som"),
-                            ),
-                          );
-                        },
-                        separatorBuilder:
-                            (context, index) => SizedBox(height: 15),
-                        itemCount: walletController.wallets.length,
-                      ),
+                      child:
+                          _walletController.wallets.isEmpty
+                              ? const Center(
+                                child: Text(
+                                  "Amaliyotlar mavjud emas",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              )
+                              : ListView.separated(
+                                padding: const EdgeInsets.only(bottom: 20),
+                                itemBuilder: (contex, index) {
+                                  final wallet =
+                                      _walletController.wallets[index];
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(15),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Colors.black12,
+                                          blurRadius: 5,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Dismissible(
+                                      key: Key(wallet.id.toString()),
+                                      background: Container(
+                                        color: Colors.red,
+                                        alignment: Alignment.centerRight,
+                                        padding: const EdgeInsets.only(
+                                          right: 20,
+                                        ),
+                                        child: const Icon(
+                                          Icons.delete,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      direction: DismissDirection.endToStart,
+                                      confirmDismiss: (direction) async {
+                                        return await showDialog(
+                                          context: context,
+                                          builder: (BuildContext context) {
+                                            return AlertDialog(
+                                              title: const Text("O'chirish"),
+                                              content: Text(
+                                                "${wallet.title} ni o'chirishni xohlaysizmi?",
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed:
+                                                      () => Navigator.of(
+                                                        context,
+                                                      ).pop(false),
+                                                  child: const Text("Yo'q"),
+                                                ),
+                                                FilledButton(
+                                                  onPressed:
+                                                      () => Navigator.of(
+                                                        context,
+                                                      ).pop(true),
+                                                  child: const Text("Ha"),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                      onDismissed: (direction) {
+                                        _walletController.deleteWallet(
+                                          wallet.id,
+                                        );
+                                        _initializeData();
+                                        setState(() {
+                                          _calculateCosts();
+                                        });
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              "${wallet.title} o'chirildi",
+                                            ),
+                                            backgroundColor: Colors.red,
+                                            behavior: SnackBarBehavior.floating,
+                                            action: SnackBarAction(
+                                              label: 'Bekor qilish',
+                                              textColor: Colors.white,
+                                              onPressed: () {
+                                                setState(() {
+                                                  _calculateCosts();
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            15,
+                                          ),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 5,
+                                              offset: Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ListTile(
+                                          onTap: () => _manageWallet(wallet),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 8,
+                                              ),
+                                          leading: CircleAvatar(
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).primaryColor.withOpacity(0.1),
+                                            child: Text(
+                                              wallet.title[0].toUpperCase(),
+                                              style: TextStyle(
+                                                color:
+                                                    Theme.of(
+                                                      context,
+                                                    ).primaryColor,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          title: Text(
+                                            wallet.title,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          subtitle: Text(
+                                            _formatDate(wallet.date),
+                                          ),
+                                          trailing: Text(
+                                            "${wallet.cost.toStringAsFixed(0)} so'm",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                separatorBuilder:
+                                    (context, index) =>
+                                        const SizedBox(height: 12),
+                                itemCount: _walletController.wallets.length,
+                              ),
                     ),
                   ],
                 ),
@@ -252,7 +497,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String monthName(int month) {
+  String _formatDate(DateTime date) {
+    return "${date.day}-${_monthName(date.month)}, ${date.year}";
+  }
+
+  String _monthName(int month) {
     const months = [
       'yanvar',
       'fevral',
@@ -268,5 +517,11 @@ class _HomeScreenState extends State<HomeScreen> {
       'dekabr',
     ];
     return months[month - 1];
+  }
+
+  @override
+  void dispose() {
+    _balanceController.dispose();
+    super.dispose();
   }
 }
