@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hamyon/controllers/wallet_controller.dart';
 import 'package:hamyon/datacourse/local_datacourse.dart';
 import 'package:hamyon/views/widgets/manage_wallet_dialog.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -48,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _calculateCosts() {
     _costs = _walletController.wallets.fold(0, (sum, e) => sum + e.cost);
     double balanceValue = double.tryParse(_balance) ?? 0;
-    double percentValue = _costs > 0 ? (balanceValue / _costs) : 0;
+    double percentValue = _costs > 0 ? ((_costs / balanceValue) * 100) : 0;
     _percentage = percentValue.toStringAsFixed(1);
   }
 
@@ -149,6 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: true,
         leading: IconButton(
           onPressed: () {
+            print(DateTime.now());
             final now = DateTime.now();
             final previousMonth = DateTime(now.year, now.month - 1);
             setState(() {
@@ -185,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "${_costs.toStringAsFixed(0)} so'm",
+                    "${NumberFormat("#,###").format(_costs)} so`m",
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -240,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const Icon(Icons.edit, size: 16),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '$_balance so\'m',
+                                  "${NumberFormat("#,###").format(double.parse(_balance))} so`m",
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -266,8 +268,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               fontWeight: FontWeight.bold,
                               color:
                                   (double.tryParse(_percentage) ?? 0) < 1.0
-                                      ? Colors.red
-                                      : Colors.green,
+                                      ? Colors.green
+                                      : Colors.red,
                             ),
                           ),
                         ),
@@ -470,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                             _formatDate(wallet.date),
                                           ),
                                           trailing: Text(
-                                            "${wallet.cost.toStringAsFixed(0)} so'm",
+                                            "${NumberFormat("#,###").format(wallet.cost)} so'm",
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                               color: Colors.blue,
