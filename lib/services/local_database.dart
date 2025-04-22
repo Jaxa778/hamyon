@@ -35,7 +35,7 @@ class LocalDatabase {
   }
 
   Future<List<WalletModel>> get() async {
-    final data = await _database?.query(_tableName,);
+    final data = await _database?.query(_tableName);
 
     List<WalletModel> costs = [];
 

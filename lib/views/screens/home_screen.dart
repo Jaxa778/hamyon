@@ -1,3 +1,4 @@
+import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:hamyon/controllers/wallet_controller.dart';
 import 'package:hamyon/datacourse/local_datacourse.dart';
@@ -151,8 +152,9 @@ class _HomeScreenState extends State<HomeScreen> {
         leading: IconButton(
           onPressed: () {
             print(DateTime.now());
-            final now = DateTime.now();
+            final now = _currentDate;
             final previousMonth = DateTime(now.year, now.month - 1);
+            _currentDate = previousMonth;
             setState(() {
               _currentMonth = _monthName(previousMonth.month);
             });
@@ -162,8 +164,23 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              final now = DateTime.now();
+              if (AdaptiveTheme.of(context).mode == AdaptiveThemeMode.light) {
+                AdaptiveTheme.of(context).setDark();
+              } else {
+                AdaptiveTheme.of(context).setLight();
+              }
+            },
+            icon: Icon(
+              AdaptiveTheme.of(context).mode == AdaptiveThemeMode.light
+                  ? Icons.dark_mode
+                  : Icons.light_mode,
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              final now = _currentDate;
               final nextMonth = DateTime(now.year, now.month + 1);
+              _currentDate = nextMonth;
               setState(() {
                 _currentMonth = _monthName(nextMonth.month);
               });
@@ -205,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               height: 600,
               decoration: const BoxDecoration(
-                color: Colors.blue,
+                color: Colors.blueGrey,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(40),
                   topRight: Radius.circular(40),
@@ -298,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               height: 450,
               decoration: const BoxDecoration(
-                color: Colors.orange,
+                color: Colors.black,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(40),
                   topRight: Radius.circular(40),
